@@ -7,7 +7,7 @@
 
     <script type="text/javascript">
         Rally.onReady(function () {
-                Ext.define("CustomApp",{extend:"Rally.app.App",componentCls:"app",launch:function(){}});
+                Ext.define("CustomApp",{extend:"Rally.app.App",componentCls:"app",launch:function(){var tcStore=Ext.create("Rally.data.wsapi.Store",{model:"TestCase",fetch:["Name","WorkProduct.Parent","Tags.Name","WorkProduct","LastVerdict"],filters:[{property:"Tags.Name",operator:"=",value:"TESTCASES_REVIEWED"}],autoload:!0,listeners:{load:function(store,testcases){_.each(testcases,function(testcase){console.log("testcase: ",testcase)})}}})}});
 
             Rally.launchApp('CustomApp', {
                 name:"FeatureTestTraceability",

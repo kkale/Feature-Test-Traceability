@@ -11,9 +11,25 @@
     extend: 'Rally.app.App',
     componentCls: 'app',
     launch: function() {
-        //Write app code here
 
-        //API Docs: https://help.rallydev.com/apps/2.0/doc/
+			var tcStore = Ext.create('Rally.data.wsapi.Store', {
+				model: 'TestCase',
+				fetch: ['Name', 'WorkProduct.Parent', 'Tags.Name', 'WorkProduct', 'LastVerdict'],
+				filters: [{
+					property: "Tags.Name",
+					operator: "=",
+					value: "TESTCASES_REVIEWED"
+				}],
+				autoload: true,
+				listeners: {
+					load: function(store, testcases) {
+						_.each(testcases, function(testcase){
+							console.log("testcase: ", testcase);
+						}); 
+					}
+				}
+			});
+
     }
 });
 
