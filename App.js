@@ -1,9 +1,10 @@
-var app = null;
-var traceRecords = [];
-var stories = [];
-var storyFeatureMap = [];
-var featureOidNameMap = []
 var packageType = 'iOS';
+/**********************************/
+
+var app = null;
+var storyCache = [];
+var storyFeatureMap = [];
+var featureCache = [];
 Ext.define('TestCaseTraceability', {
     extend: 'Rally.app.App',
     componentCls: 'app',
@@ -21,38 +22,56 @@ Ext.define('TestCaseTraceability', {
 			limit: 'Infinity' 
 		});
 		tcStore.load().then({
-			success: function(testCases){
-				app.loadTestCases(testCases)
-			}	 
+			success: app.loadTestCases
 		}).then({
-			success: app.processTraceRecords
+			success: function(traceRecords) {
+				console.log("============================================================");
+								console.log("==traceRecords: ", traceRecords);
+				console.log("============================================================");
+			},
+			failure: function(error) {
+								console.log("==error: ", error);
+			}
 		});
     },
 
     loadTestCases: function(testCases) {
-    	var promises = [];
+		var deferred = Ext.create('Deft.Deferred');
+		var promises = [];
 		_.each(testCases, function(testCase){
-			if (testCase.data.WorkProduct && testCase.data.WorkProduct._type == "HierarchicalRequirement"){
-				var traceRecord = {testCaseId: testCase.data.FormattedID, testCaseName: testCase.data.Name, lastVerdict: null, feature: null};
-				promises.push(app.loadFeatureForTestCase(testCase, traceRecord));
-				promises.push(app.loadResultForTestCase(testCase, traceRecord));
-				traceRecords.push(traceRecord);				
+			if (testCase.data.WorkProduct && testCase.data.WorkProduct._type == "HierarchicalRequirement") {
+				var traceRecord = {testCaseId: testCase.data.FormattedID, testCaseName: testCase.data.Name, lastVerdict: null, featureName: null, featureID: null};
+				app.loadFeatureForTestCase(testCase).then({
+					success: function(feature) {
+						traceRecord.featureID = feature.get("ObjectID");
+						traceRecord.featureName = feature.get("Name");
+						app.loadResultForTestCase(testCase).then({
+							success: function(lastVerdict) {
+								traceRecord.lastVerdict = lastVerdict;
+								console.log("==traceRecord: ", traceRecord);
+								promises.push(traceRecord);
+							},
+						});
+					}
+				});
 			}			
 		});
-		return promises;
+		return Deft.Promise.all(promises);
     },
 
-    loadFeatureForTestCase: function(testCase, traceRecord) {
+    loadFeatureForTestCase: function(testCase) {
     	var deferred = Ext.create('Deft.Deferred');
     	var storyID = testCase.data.WorkProduct.FormattedID;
     	    	
-    	if (_.contains(stories, storyID)) {
-    		var featureDetail = featureOidNameMap[storyFeatureMap[storyID]];;
-    	}
+    	if (_.contains(storyCache, storyID)) {
+    		var feature = featureCache[storyFeatureMap[storyID]];
+    		if (feature) {
+				deferred.resolve();
+				return deferred.promise;    			
+    		}
+		}
 
     	console.log("USer Story: ", storyID);
-
-    	stories.push(storyID);
 
     	var storyStore = Ext.create('Rally.data.wsapi.Store', {
     		model: "UserStory",
@@ -70,32 +89,37 @@ Ext.define('TestCaseTraceability', {
 	    			var feature = stories[0].data.Feature;
 	    			if (feature) {
 	    				var featureOID = feature._ref.split("/")[3];
-	    				console.log("oid: " , featureOID);
+	    				console.log("Feature oid: " , featureOID);
 	    				storyFeatureMap.push({storyID:featureOID});
-	    				app.getFeatureDetails(traceRecord, featureOID);
-		    			traceRecord.feature = feature;    				
+	    				app.getFeatureDetails(featureOID).then({
+		    			 	success: function (feature){
+		    			 		console.log("feature: ", feature);
+		    			 		deferred.resolve(feature);
+		    			 	}	
+	    				});
 	    			} else {
 		    			traceRecord.feature = "No Feature Found";    					    				
+	    				deferred.reject("Could not find feature");    				    				
 	    			}
-	    			deferred.resolve(stories);    				    				
     			} else {
+			        console.log("Error loading stories.");
 			        deferred.reject("Error loading stories.");
     			}
     		}
 
     	});
+
+    	storyCache.push(storyID);
     	return deferred.promise;
     },
 
 
-    getFeatureDetails: function(traceRecord, featureOID) {
-    	if (_.contains(_.keys(featureOidNameMap), featureOID)) {
-    		console.log("featureDetails: ", featureOidNameMap[featureOID]);
-    		traceRecord.featureName = featureOidNameMap[featureOID].name;
-    		traceRecord.featureID = featureOidNameMap[featureOID].formattedID;
-    		return;
-    	}
+    getFeatureDetails: function(featureOID) {
 		var deferred = Ext.create('Deft.Deferred');
+    	if (_.contains(_.keys(featureCache), featureOID)) {
+    		return deferred.resolve(featureCache[featureOID]);
+    	}
+
 	   	var featureStore = Ext.create('Rally.data.wsapi.Store', {
 	    		model: "PortfolioItem/Feature",
 	    		fetch: ['FormattedID','Name'],
@@ -110,15 +134,12 @@ Ext.define('TestCaseTraceability', {
 	    	callback: function(features, operation, success) {
 	    		if (success) {
 	    			if(features[0]){
-	    				var formattedID = features[0].get("FormattedID");
-	    				var name = features[0].get("Name")
-		    			traceRecord.featureID = formattedID;
-		    			traceRecord.featureName = name;
-		    			featureOidNameMap.push({featureOID:{"formattedID": formattedID, "name": name}});
-		    			deferred.resolve(features);
+	    				featureCache.push({featureOID:features[0]});
+		    			deferred.resolve(features[0]);
 	    			}
 	    		} else {
 			        deferred.reject("Error loading feature");
+			        console.log("Couldn't load feature");
 	    		}
 
 	    	}
@@ -128,21 +149,20 @@ Ext.define('TestCaseTraceability', {
     },
 
 
-    loadResultForTestCase: function(testCase, traceRecord) {
+    loadResultForTestCase: function(testCase) {
     	var deferred = Ext.create('Deft.Deferred');
     	testCase.getCollection("Results").load({
     		callback: function(results, operation, success) {
+    			var result = "--";
     			if(success) {
 	    			for(var index = results.length; index--; index >=0 ){
 	    				if(results[index].data.SystemPackage = packageType) {
-	    					traceRecord.lastVerdict = results[index].data.Verdict;
+	    					result = results[index].data.Verdict;
 	    					break;
 	    				}
 	    			}
-	    			if (traceRecord.lastVerdict == null) {
-	    				traceRecord.lastVerdict = "--"
-	    			}
-	    			deferred.resolve(results);
+	    			console.log("result: ", result);
+	    			deferred.resolve(result);
     			} else {
 			        deferred.reject("Error loading results.");
     			}
@@ -151,7 +171,7 @@ Ext.define('TestCaseTraceability', {
     	return deferred.promise;
     },
 
-    processTraceRecords: function() {
+    processTraceRecords: function(traceRecords) {
 
     	var grid = app.down("rallygrid");
     	if (grid) {
@@ -165,9 +185,7 @@ Ext.define('TestCaseTraceability', {
             showPagingToolbar: true,
             showRowActionsColumn: false,
             editable: false,
-            store: Ext.create('Rally.data.custom.Store', {
-				data: traceRecords
-            }),
+            store: traceRecords,
 			columnCfgs: [
                 {text:'Feature ID', dataIndex: "featureID", flex: 1},
                 {text:'Feature Name', dataIndex: "featureName", flex: 1},
