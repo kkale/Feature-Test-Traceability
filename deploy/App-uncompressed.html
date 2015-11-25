@@ -7,34 +7,230 @@
 
     <script type="text/javascript">
         Rally.onReady(function () {
-                Ext.define('CustomApp', {
+                var packageType = 'iOS';
+/**********************************/
+
+var app = null;
+var storyCache = [];
+var storyFeatureMap = [];
+var featureCache = [];
+Ext.define('TestCaseTraceability', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     launch: function() {
+    	app = this;
+ 		var tcStore = Ext.create('Rally.data.wsapi.Store', {
+			model: 'TestCase',
+			fetch: ['Name', 'WorkProduct.Parent', 'Tags.Name', 'WorkProduct', 'LastVerdict', 'Results', 'FormattedID'],
+			filters: [{
+				property: "Tags.Name",
+				operator: "=",
+				value: "SRS TC"
+			}],
+			autoLoad: false,
+			limit: 'Infinity' 
+		});
+		tcStore.load().then({
+			success: app.loadTestCases
+		}).then({
+			success: function(traceRecords) {
+				console.log("============================================================");
+								console.log("==traceRecords: ", traceRecords);
+					app.processTraceRecords(traceRecords);
+				console.log("============================================================");
+			},
+			failure: function(error) {
+								console.log("==error: ", error);
+			}
+		});
+    },
 
-			var tcStore = Ext.create('Rally.data.wsapi.Store', {
-				model: 'TestCase',
-				fetch: ['Name', 'WorkProduct.Parent', 'Tags.Name', 'WorkProduct', 'LastVerdict'],
-				filters: [{
-					property: "Tags.Name",
-					operator: "=",
-					value: "TESTCASES_REVIEWED"
-				}],
-				autoload: true,
-				listeners: {
-					load: function(store, testcases) {
-						_.each(testcases, function(testcase){
-							console.log("testcase: ", testcase);
-						}); 
+    loadTestCases: function(testCases) {
+		var deferred = Ext.create('Deft.Deferred');
+		var promises = [];
+		_.each(testCases, function(testCase){
+			if (testCase.data.WorkProduct && testCase.data.WorkProduct._type == "HierarchicalRequirement") {
+				var traceRecord = {testCaseId: testCase.data.FormattedID, testCaseName: testCase.data.Name, lastVerdict: null, featureName: null, featureID: null};
+				var deferred = Ext.create('Deft.Deferred');
+				app.loadFeatureForTestCase(testCase).then({
+					success: function(feature) {
+						traceRecord.featureID = feature.get("FormattedID");
+						traceRecord.featureName = feature.get("Name");
+						app.loadResultForTestCase(testCase).then({
+							success: function(lastVerdict) {
+								traceRecord.lastVerdict = lastVerdict;
+								console.log("==traceRecord: ", traceRecord);
+								deferred.resolve(traceRecord);
+							},
+						});
 					}
-				}
-			});
+				});
+				promises.push(deferred.promise);
+			}			
+		});
+		return Deft.Promise.all(promises);
+    },
 
-    }
-});
+    loadFeatureForTestCase: function(testCase) {
+    	var deferred = Ext.create('Deft.Deferred');
+    	var storyID = testCase.data.WorkProduct.FormattedID;
+    	    	
+    	if (_.contains(storyCache, storyID)) {
+    		var feature = featureCache[storyFeatureMap[storyID]];
+    		if (feature) {
+				deferred.resolve();
+				return deferred.promise;    			
+    		}
+		}
+
+    	console.log("USer Story: ", storyID);
+
+    	var storyStore = Ext.create('Rally.data.wsapi.Store', {
+    		model: "UserStory",
+    		fetch: ['Feature', 'Feature.FormattedID', 'Feature[FormattedID]'],
+    		filters: [{
+    			property: "FormattedID",
+    			operator: "=",
+    			value: testCase.data.WorkProduct.FormattedID
+    		}],
+    		autoLoad: false,
+    	});
+    	storyStore.load({
+    		callback: function(stories, operation, success){
+    			if (success) {
+	    			var feature = stories[0].data.Feature;
+	    			if (feature) {
+	    				var featureOID = feature._ref.split("/")[3];
+	    				console.log("Feature oid: " , featureOID);
+	    				storyFeatureMap.push({storyID:featureOID});
+	    				app.getFeatureDetails(featureOID).then({
+		    			 	success: function (feature){
+		    			 		console.log("feature: ", feature);
+		    			 		deferred.resolve(feature);
+		    			 	}	
+	    				});
+	    			} else {
+		    			traceRecord.feature = "No Feature Found";    					    				
+	    				deferred.reject("Could not find feature");    				    				
+	    			}
+    			} else {
+			        console.log("Error loading stories.");
+			        deferred.reject("Error loading stories.");
+    			}
+    		}
+
+    	});
+
+    	storyCache.push(storyID);
+    	return deferred.promise;
+    },
 
 
-            Rally.launchApp('CustomApp', {
+    getFeatureDetails: function(featureOID) {
+		var deferred = Ext.create('Deft.Deferred');
+    	if (_.contains(_.keys(featureCache), featureOID)) {
+    		return deferred.resolve(featureCache[featureOID]);
+    	}
+
+	   	var featureStore = Ext.create('Rally.data.wsapi.Store', {
+	    		model: "PortfolioItem/Feature",
+	    		fetch: ['FormattedID','Name'],
+	    		filters: [{
+	    			property: "ObjectID",
+	    			operator: "=",
+	    			value: featureOID
+	    		}],
+	    		autoLoad: true
+	    	});
+	    featureStore.load({
+	    	callback: function(features, operation, success) {
+	    		if (success) {
+	    			if(features[0]){
+	    				featureCache.push({featureOID:features[0]});
+		    			deferred.resolve(features[0]);
+	    			}
+	    		} else {
+			        deferred.reject("Error loading feature");
+			        console.log("Couldn't load feature");
+	    		}
+
+	    	}
+	    });
+	    return deferred.promise;
+
+    },
+
+
+    loadResultForTestCase: function(testCase) {
+    	var deferred = Ext.create('Deft.Deferred');
+    	testCase.getCollection("Results").load({
+    		callback: function(results, operation, success) {
+    			var result = "--";
+    			if(success) {
+	    			for(var index = results.length; index--; index >=0 ){
+	    				if(results[index].data.SystemPackage = packageType) {
+	    					result = results[index].data.Verdict;
+	    					break;
+	    				}
+	    			}
+	    			console.log("result: ", result);
+	    			deferred.resolve(result);
+    			} else {
+			        deferred.reject("Error loading results.");
+    			}
+    		}
+    	})
+    	return deferred.promise;
+    },
+
+    processTraceRecords: function(traceRecords) {
+
+    	var grid = app.down("rallygrid");
+    	if (grid) {
+    		grid.destroy();
+    	}
+
+    	console.log("traceRecords: ", traceRecords);
+
+		app.add({
+			xtype: 'rallygrid',
+            showPagingToolbar: true,
+            showRowActionsColumn: false,
+            editable: false,
+            context: app.getContext(),
+            features: [{
+                ftype: 'groupingsummary',
+                groupHeaderTpl: '{name} ({rows.length})'
+            }],
+
+            store: Ext.create('Rally.data.custom.Store', {
+                data: traceRecords,
+                groupField: 'featureID',
+                groupDir: 'ASC',
+                getGroupString: function(record) {
+                    var groupString = record.get('featureID');
+                    if (groupString) {
+                    	groupString = groupString + " " + record.get("featureName");
+                    } else {
+                    	groupString = "No feature found";
+                    }
+
+                    return groupString;
+                }
+			}),
+
+			columnCfgs: [
+                {text:'TestCase ID', dataIndex: "testCaseId", flex: 1},
+                {text:'TestCase Name', dataIndex: "testCaseName", flex: 1},
+                {text:'Result', dataIndex: "lastVerdict", flex: 1},
+            ],
+            context: app.getContext()
+		});
+	}
+
+ });
+
+            Rally.launchApp('TestCaseTraceability', {
                 name:"FeatureTestTraceability",
 	            parentRepos:""
             });
