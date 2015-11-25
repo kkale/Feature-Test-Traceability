@@ -27,6 +27,7 @@ Ext.define('TestCaseTraceability', {
 			success: function(traceRecords) {
 				console.log("============================================================");
 								console.log("==traceRecords: ", traceRecords);
+					app.processTraceRecords(traceRecords);
 				console.log("============================================================");
 			},
 			failure: function(error) {
@@ -41,19 +42,21 @@ Ext.define('TestCaseTraceability', {
 		_.each(testCases, function(testCase){
 			if (testCase.data.WorkProduct && testCase.data.WorkProduct._type == "HierarchicalRequirement") {
 				var traceRecord = {testCaseId: testCase.data.FormattedID, testCaseName: testCase.data.Name, lastVerdict: null, featureName: null, featureID: null};
+				var deferred = Ext.create('Deft.Deferred');
 				app.loadFeatureForTestCase(testCase).then({
 					success: function(feature) {
-						traceRecord.featureID = feature.get("ObjectID");
+						traceRecord.featureID = feature.get("FormattedID");
 						traceRecord.featureName = feature.get("Name");
 						app.loadResultForTestCase(testCase).then({
 							success: function(lastVerdict) {
 								traceRecord.lastVerdict = lastVerdict;
 								console.log("==traceRecord: ", traceRecord);
-								promises.push(traceRecord);
+								deferred.resolve(traceRecord);
 							},
 						});
 					}
 				});
+				promises.push(deferred.promise);
 			}			
 		});
 		return Deft.Promise.all(promises);
@@ -152,7 +155,7 @@ Ext.define('TestCaseTraceability', {
     loadResultForTestCase: function(testCase) {
     	var deferred = Ext.create('Deft.Deferred');
     	testCase.getCollection("Results").load({
-    		callback: function(results, operation, success) {
+    		callback: function(results, operation, success) {
     			var result = "--";
     			if(success) {
 	    			for(var index = results.length; index--; index >=0 ){
@@ -185,29 +188,34 @@ Ext.define('TestCaseTraceability', {
             showPagingToolbar: true,
             showRowActionsColumn: false,
             editable: false,
-            store: traceRecords,
+            context: app.getContext(),
+            features: [{
+                ftype: 'groupingsummary',
+                groupHeaderTpl: '{name} ({rows.length})'
+            }],
+
+            store: Ext.create('Rally.data.custom.Store', {
+                data: traceRecords,
+                groupField: 'featureID',
+                groupDir: 'ASC',
+                getGroupString: function(record) {
+                    var groupString = record.get('featureID');
+                    if (groupString) {
+                    	groupString = groupString + " " + record.get("featureName");
+                    } else {
+                    	groupString = "No feature found";
+                    }
+
+                    return groupString;
+                }
+			}),
+
 			columnCfgs: [
-                {text:'Feature ID', dataIndex: "featureID", flex: 1},
-                {text:'Feature Name', dataIndex: "featureName", flex: 1},
                 {text:'TestCase ID', dataIndex: "testCaseId", flex: 1},
                 {text:'TestCase Name', dataIndex: "testCaseName", flex: 1},
                 {text:'Result', dataIndex: "lastVerdict", flex: 1},
             ],
-            context: app.getContext(),
-            // features: [{
-            //     ftype: 'groupingsummary',
-            //     groupHeaderTpl: '{name} ({rows.length})'
-            // }],
-            // storeConfig: {
-            //     model: 'task',
-            //     groupField: 'Owner',
-            //     groupDir: 'ASC',
-            //     fetch: ['Owner'],
-            //     getGroupString: function(record) {
-            //         var owner = record.get('Owner');
-            //         return (owner && owner._refObjectName) || 'No Owner';
-            //     }
-            // }
+            context: app.getContext()
 		});
 	}
 
