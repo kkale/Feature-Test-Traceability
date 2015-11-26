@@ -7,7 +7,10 @@ var storyFeatureMap = [];
 var featureCache = [];
 Ext.define('TestCaseTraceability', {
     extend: 'Rally.app.App',
-    componentCls: 'app',
+    componentCls: 'traceable',
+	cls: 'traceable',
+
+
     launch: function() {
     	app = this;
  		var tcStore = Ext.create('Rally.data.wsapi.Store', {
@@ -25,10 +28,8 @@ Ext.define('TestCaseTraceability', {
 			success: app.loadTestCases
 		}).then({
 			success: function(traceRecords) {
-				console.log("============================================================");
-								console.log("==traceRecords: ", traceRecords);
-					app.processTraceRecords(traceRecords);
-				console.log("============================================================");
+				console.log("==traceRecords: ", traceRecords);
+				app.processTraceRecords(traceRecords);
 			},
 			failure: function(error) {
 								console.log("==error: ", error);
@@ -156,7 +157,7 @@ Ext.define('TestCaseTraceability', {
     	var deferred = Ext.create('Deft.Deferred');
     	testCase.getCollection("Results").load({
     		callback: function(results, operation, success) {
-    			var result = "--";
+    			var result = "Not Tested";
     			if(success) {
 	    			for(var index = results.length; index--; index >=0 ){
 	    				if(results[index].data.SystemPackage = packageType) {
@@ -191,7 +192,22 @@ Ext.define('TestCaseTraceability', {
             context: app.getContext(),
             features: [{
                 ftype: 'groupingsummary',
-                groupHeaderTpl: '{name} ({rows.length})'
+				groupHeaderTpl: [
+				    '{name} ',
+				    '{rows:this.formatRows}',
+				    {
+				        formatRows: function(rows) {
+				        	console.log("rows: ", rows);
+				        	var lastVerdictCount = _.countBy(rows, function(row){
+					        	return row.get("lastVerdict");
+				        	})
+				        	console.log("lastVerdictCount: ", lastVerdictCount);
+				            return "(Pass: " + (lastVerdictCount.Pass ? lastVerdictCount.Pass : 0 )
+				            		+ ", Fail: " + (lastVerdictCount.Fail ? lastVerdictCount.Fail : 0 ) + ")";
+				        }
+				    }
+
+				]
             }],
 
             store: Ext.create('Rally.data.custom.Store', {
@@ -213,10 +229,26 @@ Ext.define('TestCaseTraceability', {
 			columnCfgs: [
                 {text:'TestCase ID', dataIndex: "testCaseId", flex: 1},
                 {text:'TestCase Name', dataIndex: "testCaseName", flex: 1},
-                {text:'Result', dataIndex: "lastVerdict", flex: 1},
+                {
+                	text:'Result', 
+                	dataIndex: "lastVerdict", 
+                	flex: 1,
+	                // summaryType: function(records){
+	                // summaryRenderer: Ext.util.Format.attributes({class:'resultsummary'})
+
+                }
             ],
+
+		    viewConfig: { 
+		        stripeRows: false, 
+		        getRowClass: function(record) { 
+		        	return record.get("lastVerdict").replace(/\s+/g, '-').toLowerCase();
+		        } 
+		    }, 
+
             context: app.getContext()
 		});
 	}
+
 
  });

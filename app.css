@@ -1,3 +1,31 @@
-.app {
-     /* Add app styles here */
+.traceable {
+
+	.dummy  .x-grid-cell { 
+	    background-color: #ffe2e2; 
+	} 
+	
+	.fail .x-grid-cell { 
+	    background-color: #ffe2e2; 
+	} 
+	 
+	.pass .x-grid-cell { 
+	    background-color: #e2ffe2; 
+	}
+
+	.not-tested .x-grid-cell { 
+	    background-color: #ffd9b3; 
+	}
+
+	.blocked .x-grid-cell { 
+	    background-color: #a6a6a6; 
+	}
+
+	.x-grid-group-title {
+		font-size: large	
+	}
+
+	.x-grid-group-summary .x-grid-cell .x-grid-cell-inner{
+		font-size: large	
+	}
+
 }
