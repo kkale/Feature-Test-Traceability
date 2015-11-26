@@ -1,4 +1,4 @@
-var packageType = 'iOS';
+var packageType = 'iOS System';
 /**********************************/
 
 var app = null;
@@ -28,7 +28,7 @@ Ext.define('TestCaseTraceability', {
 			success: app.loadTestCases
 		}).then({
 			success: function(traceRecords) {
-				console.log("==traceRecords: ", traceRecords);
+//				console.log("==traceRecords: ", traceRecords);
 				app.processTraceRecords(traceRecords);
 			},
 			failure: function(error) {
@@ -75,7 +75,7 @@ Ext.define('TestCaseTraceability', {
     		}
 		}
 
-    	console.log("USer Story: ", storyID);
+//    	console.log("USer Story: ", storyID);
 
     	var storyStore = Ext.create('Rally.data.wsapi.Store', {
     		model: "UserStory",
@@ -93,11 +93,10 @@ Ext.define('TestCaseTraceability', {
 	    			var feature = stories[0].data.Feature;
 	    			if (feature) {
 	    				var featureOID = feature._ref.split("/")[3];
-	    				console.log("Feature oid: " , featureOID);
+	 //   				console.log("Feature oid: " , featureOID);
 	    				storyFeatureMap.push({storyID:featureOID});
 	    				app.getFeatureDetails(featureOID).then({
 		    			 	success: function (feature){
-		    			 		console.log("feature: ", feature);
 		    			 		deferred.resolve(feature);
 		    			 	}	
 	    				});
@@ -156,11 +155,13 @@ Ext.define('TestCaseTraceability', {
     loadResultForTestCase: function(testCase) {
     	var deferred = Ext.create('Deft.Deferred');
     	testCase.getCollection("Results").load({
+    		fetch: ['SystemPackage', 'Verdict'],
     		callback: function(results, operation, success) {
     			var result = "Not Tested";
     			if(success) {
 	    			for(var index = results.length; index--; index >=0 ){
-	    				if(results[index].data.SystemPackage = packageType) {
+	    				console.log("System Package: ", results[index].get("c_SystemPackage"));
+	    				if(results[index].get("c_SystemPackage") === packageType) {
 	    					result = results[index].data.Verdict;
 	    					break;
 	    				}
@@ -197,11 +198,9 @@ Ext.define('TestCaseTraceability', {
 				    '{rows:this.formatRows}',
 				    {
 				        formatRows: function(rows) {
-				        	console.log("rows: ", rows);
 				        	var lastVerdictCount = _.countBy(rows, function(row){
 					        	return row.get("lastVerdict");
 				        	})
-				        	console.log("lastVerdictCount: ", lastVerdictCount);
 				            return "(Pass: " + (lastVerdictCount.Pass ? lastVerdictCount.Pass : 0 )
 				            		+ ", Fail: " + (lastVerdictCount.Fail ? lastVerdictCount.Fail : 0 ) + ")";
 				        }
