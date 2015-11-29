@@ -7,7 +7,8 @@
 
     <script type="text/javascript">
         Rally.onReady(function () {
-                var packageType = 'iOS System';
+		var packageType = 'iOS System';
+
 /**********************************/
 
 var app = null;
@@ -22,19 +23,20 @@ Ext.define('TestCaseTraceability', {
 
     launch: function() {
     	app = this;
- 		var tcStore = Ext.create('Rally.data.wsapi.Store', {
-			model: 'TestCase',
-			fetch: ['Name', 'WorkProduct.Parent', 'Tags.Name', 'WorkProduct', 'LastVerdict', 'Results', 'FormattedID'],
+ 		var featureStore = Ext.create('Rally.data.wsapi.Store', {
+			model: 'PortfolioItem/Feature',
+			fetch: ['Name', 'Children', 'Release', 'ObjectID', 'FormattedID'],
 			filters: [{
-				property: "Tags.Name",
-				operator: "=",
-				value: "SRS TC"
+				property: "Release",
+				operator: "!=",
+				value: null
 			}],
 			autoLoad: false,
 			limit: 'Infinity' 
 		});
-		tcStore.load().then({
-			success: app.loadTestCases
+		
+		featureStore.load().then({
+			success: app.loadFeatures();
 		}).then({
 			success: function(traceRecords) {
 //				console.log("==traceRecords: ", traceRecords);
@@ -45,6 +47,11 @@ Ext.define('TestCaseTraceability', {
 			}
 		});
     },
+
+    loadFeatures: function() {
+    	
+    }
+
 
     loadTestCases: function(testCases) {
 		var deferred = Ext.create('Deft.Deferred');
@@ -58,9 +65,17 @@ Ext.define('TestCaseTraceability', {
 						traceRecord.featureID = feature.get("FormattedID");
 						traceRecord.featureName = feature.get("Name");
 						app.loadResultForTestCase(testCase).then({
-							success: function(lastVerdict) {
-								traceRecord.lastVerdict = lastVerdict;
-								console.log("==traceRecord: ", traceRecord);
+							success: function(result) {
+								if (result) {
+									traceRecord.lastVerdict = result.get("Verdict");
+									traceRecord.build =  result.get("Build");
+									traceRecord.notes =  result.get("Notes");
+								} else {
+									traceRecord.lastVerdict = "Not Tested";
+									traceRecord.build =  "--";
+									traceRecord.notes =  "--";
+
+								}
 								deferred.resolve(traceRecord);
 							},
 						});
@@ -164,14 +179,14 @@ Ext.define('TestCaseTraceability', {
     loadResultForTestCase: function(testCase) {
     	var deferred = Ext.create('Deft.Deferred');
     	testCase.getCollection("Results").load({
-    		fetch: ['SystemPackage', 'Verdict'],
+    		fetch: ['SystemPackage', 'Verdict', 'Build', 'Notes'],
     		callback: function(results, operation, success) {
-    			var result = "Not Tested";
+    			var result = null;
     			if(success) {
 	    			for(var index = results.length; index--; index >=0 ){
 	    				console.log("System Package: ", results[index].get("c_SystemPackage"));
 	    				if(results[index].get("c_SystemPackage") === packageType) {
-	    					result = results[index].data.Verdict;
+	    					result = results[index];
 	    					break;
 	    				}
 	    			}
@@ -237,14 +252,9 @@ Ext.define('TestCaseTraceability', {
 			columnCfgs: [
                 {text:'TestCase ID', dataIndex: "testCaseId", flex: 1},
                 {text:'TestCase Name', dataIndex: "testCaseName", flex: 1},
-                {
-                	text:'Result', 
-                	dataIndex: "lastVerdict", 
-                	flex: 1,
-	                // summaryType: function(records){
-	                // summaryRenderer: Ext.util.Format.attributes({class:'resultsummary'})
-
-                }
+                {text:'Result', dataIndex: "lastVerdict", flex: 1},
+                {text:'Build', dataIndex: "build", flex: 1},
+                {text:'Notes', dataIndex: "notes", flex: 1}
             ],
 
 		    viewConfig: { 

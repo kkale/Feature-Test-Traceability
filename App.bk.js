@@ -34,7 +34,7 @@ Ext.define('TestCaseTraceability', {
         });
 
         tcStore.load().then({
-            success: app.loadAllData
+            success: app.loadAllData,
         }).then({
                 success: function (traceRecords) {
                     console.log("Successfully got trace records: ", traceRecords);
@@ -51,32 +51,27 @@ Ext.define('TestCaseTraceability', {
         var promises = [];
         _.each(features, function (feature) {                               // for each feature
 
-            console.log("Loading feature: ", feature.get("FormattedID"));
+            console.log("features: ", feature.get("FormattedID"));
 
+            if (feature.getCollection('UserStories')) {
 
                 console.log("UserStories: ", feature.getCollection("UserStories"));
 
                 feature.getCollection("UserStories").load({                         // load user stories
                     fetch: ['TestCases'],
-
                     callback: function (userStories) {
-
                         _.each(userStories, function (userStory) {                  // for each user story
-
+                            if (userStory.getCollection('TestCases')) {
                                 userStory.getCollection('TestCases').load({         // load test cases
-
                                     fetch: ['Results', 'FormattedID', 'Name'],
-
                                     filters: [
-                                        {                                           // with "SRS TC" tag
+                                        {                                           // with SRS TC tag
                                             property: "Tags.Name",
                                             operator: "=",
                                             value: "SRS TC"
                                         }
                                     ],
-
                                     callback: function (testCases) {
-
                                         console.log("TestCases: ", testCases);
 
                                         if (testCases.length == 0) {
@@ -115,7 +110,7 @@ Ext.define('TestCaseTraceability', {
                                                         traceRecord.notes = "--";
 
                                                     }
-                                                    console.log("traceRecord: ", traceRecord);
+                                                    console.log("test result: ", traceRecord);
                                                     deferred.resolve(traceRecord);
                                                 },
 
@@ -129,10 +124,12 @@ Ext.define('TestCaseTraceability', {
                                     }
                                 })
 
+                            }
 
                         });
                     }
                 });
+            }
         })
         console.log("Returning Promises Now");
         return Deft.Promise.all(promises);
