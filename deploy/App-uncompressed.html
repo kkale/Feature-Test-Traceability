@@ -17,11 +17,25 @@ Ext.define('TestCaseTraceability', {
     extend: 'Rally.app.App',
     componentCls: 'traceable',
     cls: 'traceable',
-
+    items:  [
+                {xtype:'container',itemId:'export_box',margin: 10, layout: { type: 'hbox'} },
+                {xtype:'container',itemId:'grid_box',padding:10}
+            ],
 
     launch: function () {
         console.log("Launching app");
         app = this;
+
+        app.down("#export_box").add({
+            xtype: 'rallybutton',
+            text: 'Export',
+            padding: 5,
+            margin: 5,
+            handler: function() {
+                app._exportGridData();
+            }
+        });
+
         var queryParser = Ext.create('Rally.data.util.QueryStringParser', {
             string: featureQuery
         });
@@ -39,6 +53,37 @@ Ext.define('TestCaseTraceability', {
                     app.drawGrid(app.flattenFeatureTree());
                 }
             });
+    },
+
+
+    _exportGridData: function() {
+        this._loadFeatures().then({
+            success: this._loadStories,
+            scope: this
+        }).then({
+                success: this._loadTestCases,
+                scope: this
+            }).then({
+                success: this._loadTestCaseResults,
+                scope: this
+            }).then({
+                success: function(results) {
+                    app._exportCSV(app.flattenFeatureTree());
+                }
+            });
+    },
+
+    _exportCSV: function(traceRecords) {
+        var csvArray = [];
+        csvArray.push(_.keys(traceRecords[0]));
+        _.each(traceRecords,function(record){
+            csvArray.push(_.values(record));
+        });
+
+        var csvContent = "data:text/csv;charset=utf-8," + csvArray.join("\n");
+        console.log("csvContent: ", csvContent);
+        var encodedUri = encodeURI(csvContent);
+        window.open(encodedUri);
     },
 
     _loadFeatures: function() {
@@ -186,26 +231,14 @@ Ext.define('TestCaseTraceability', {
 
     drawGrid: function (traceRecords) {
 
-        var grid = app.down("rallygrid");
+        var grid = app.down("#grid_box").down("rallygrid");
         if (grid) {
             grid.destroy();
         }
 
         console.log("traceRecords: ", traceRecords);
 
-        Ext.create('Ext.Container', {
-            items: [{
-                xtype: 'rallybutton',
-                text: 'Click me',
-                handler: function() {
-                    Ext.Msg.alert('Button', 'You clicked me');
-                    console.log('Button click! ', traceRecords);
-                }
-            }],
-            renderTo: Ext.getBody().dom
-        });
-
-        app.add({
+        app.down("#grid_box").add({
             xtype: 'rallygrid',
             showPagingToolbar: true,
             showRowActionsColumn: false,

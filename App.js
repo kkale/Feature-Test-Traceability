@@ -66,6 +66,7 @@ Ext.define('TestCaseTraceability', {
 
     _exportCSV: function(traceRecords) {
         var csvArray = [];
+        csvArray.push(_.keys(traceRecords[0]));
         _.each(traceRecords,function(record){
             csvArray.push(_.values(record));
         });
