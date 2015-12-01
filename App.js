@@ -68,13 +68,19 @@ Ext.define('TestCaseTraceability', {
         var csvArray = [];
         csvArray.push(_.keys(traceRecords[0]));
         _.each(traceRecords,function(record){
-            csvArray.push(_.values(record));
+            csvArray.push(_.map(_.values(record), function(val){return '"' + val + '"'}));
         });
 
         var csvContent = "data:text/csv;charset=utf-8," + csvArray.join("\n");
         console.log("csvContent: ", csvContent);
         var encodedUri = encodeURI(csvContent);
-        window.open(encodedUri);
+
+        var aLink = document.createElement('a');
+        var evt = document.createEvent("HTMLEvents");
+        evt.initEvent("click");
+        aLink.download = "traceability.csv";
+        aLink.href = encodedUri;
+        aLink.dispatchEvent(evt);
     },
 
     _loadFeatures: function() {
@@ -189,7 +195,7 @@ Ext.define('TestCaseTraceability', {
                 traceRecord.testCaseName = "--";
                 traceRecord.lastVerdict = "--";
                 traceRecord.build = "--";
-                traceRecord.notes = "--";
+//                traceRecord.notes = "--";
                 traceRecords.push(traceRecord);
             }
 
@@ -205,12 +211,12 @@ Ext.define('TestCaseTraceability', {
                     console.log("Result Store: ", testCase.resultStore);
                     traceRecord.lastVerdict = testCase.resultStore.get("Verdict");
                     traceRecord.build = testCase.resultStore.get("Build");
-                    traceRecord.notes = testCase.resultStore.get("Notes");
+//                    traceRecord.notes = testCase.resultStore.get("Notes");
 
                 } else {
                     traceRecord.lastVerdict = "Not tested";
                     traceRecord.build = "--";
-                    traceRecord.notes = "--";
+//                    traceRecord.notes = "--";
                 }
                 traceRecords.push(traceRecord);
             });
@@ -239,7 +245,7 @@ Ext.define('TestCaseTraceability', {
                {text:'TestCase Name', dataIndex: "testCaseName", flex: 1},
                {text:'Result', dataIndex: "lastVerdict", flex: 1},
                {text:'Build', dataIndex: "build", flex: 1},
-               {text:'Notes', dataIndex: "notes", flex: 1}
+//               {text:'Notes', dataIndex: "notes", flex: 1}
            ],
 
             features: [{
